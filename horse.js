@@ -12,11 +12,10 @@ let camera;
 let orbit;
 let ambientLight;
 let mixer;
+let currAnimationIdx = -1;
 
-let walkAction;
-let gallopAction;
 const baseURL = "/assets/Horse_White.gltf";
-const ANIMATIONS = {};
+const animationActions = [];
 
 function setup() {
   gui = new GUI();
@@ -54,20 +53,22 @@ async function loadModel() {
   scene.add(model);
   console.log({ gltf, model, animations });
 
+  mixer = new THREE.AnimationMixer(model);
+
   for (const animationClip of animations) {
-    ANIMATIONS[animationClip.name] = animationClip;
+    const action = mixer.clipAction(animationClip);
+    animationActions.push(action);
   }
 
-  mixer = new THREE.AnimationMixer(model);
-  const walkClip = ANIMATIONS["Walk"];
-  const gallopClip = ANIMATIONS["Gallop"];
+  //   const walkClip = ANIMATIONS["Walk"];
+  //   const gallopClip = ANIMATIONS["Gallop"];
 
-  walkAction = mixer.clipAction(walkClip);
-  gallopAction = mixer.clipAction(gallopClip);
-  walkAction.play();
-  //   gallopAction.play();
+  //   walkAction = mixer.clipAction(walkClip);
+  //   gallopAction = mixer.clipAction(gallopClip);
+  //   walkAction.play();
+  //   //   gallopAction.play();
 
-  console.log(ANIMATIONS, mixer);
+  //   console.log(ANIMATIONS, mixer);
 }
 
 export async function runHorseDemo() {
@@ -86,14 +87,16 @@ export async function runHorseDemo() {
   });
 
   window.addEventListener("click", function () {
-    console.log(walkAction.isRunning(), { gallopAction, walkAction, mixer });
-    if (walkAction.isRunning()) {
-      walkAction.stop();
-      gallopAction.play();
-    } else {
-      gallopAction.stop();
-      walkAction.play();
-    }
+    let prevAnimationIdx = currAnimationIdx % animationActions.length;
+    currAnimationIdx = (prevAnimationIdx + 1) % animationActions.length;
+
+    let previousAnimation = animationActions[prevAnimationIdx];
+    let currentAnimation = animationActions[currAnimationIdx];
+
+    console.log(`Current animation: ${currentAnimation._clip.name}`, { currentAnimation });
+
+    previousAnimation?.stop();
+    currentAnimation.play();
   });
 }
 
