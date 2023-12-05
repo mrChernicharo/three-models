@@ -2,7 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// const glTFLoader = new GLTFLoader();
+const fileUrl = new URL("/assets/Donkey.gltf", import.meta.url);
+console.log(fileUrl);
+
+const glTFLoader = new GLTFLoader();
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -25,6 +28,9 @@ const orbit = new OrbitControls(camera, renderer.domElement);
 camera.position.set(5, 10, 15);
 orbit.update();
 
+const ambientLight = new THREE.AmbientLight(0xefefef, 0.9);
+scene.add(ambientLight);
+
 // Sets a 12 by 12 gird helper
 const gridHelper = new THREE.GridHelper(12, 12);
 scene.add(gridHelper);
@@ -33,7 +39,19 @@ scene.add(gridHelper);
 const axesHelper = new THREE.AxesHelper(14);
 scene.add(axesHelper);
 
-// glTFLoader.load('')
+// glTFLoader.load(fileUrl.href, (gltf) => {
+//   const model = gltf.scene;
+//   scene.add(model);
+
+//   console.log({ gltf, model });
+// });
+
+glTFLoader.loadAsync(fileUrl.href).then((gltf) => {
+  const model = gltf.scene;
+  scene.add(model);
+
+  console.log({ gltf, model });
+});
 
 function animate() {
   renderer.render(scene, camera);
