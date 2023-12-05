@@ -8,10 +8,27 @@ glTFLoader.loadAsync(fileUrl.href).then((gltf) => {
   scene.add(model);
 
   console.log({ gltf, model });
-
-  // model.children => Object3D
-  // model.children.children[0] => Group
-  // model.children.children[1 ...], => Bone
-  // model.children.children[0].children => SkinnedMesh
 });
 ```
+
+```js
+// model => Group
+// model.children => Object3D
+// model.children.children[0] => Group
+// model.children.children[1 ...], => Bone
+// model.children.children[0].children => SkinnedMesh
+```
+
+```js
+// navigating the model
+
+model.children[0].children[0].children[5];
+// same as
+model.getObjectByName("Cube_5");
+
+model.children[0].children[1].children[0];
+// same as
+model.getObjectByName("Back");
+```
+
+A better way of navigating Models is to visiting https://threejs.org/editor/
