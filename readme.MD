@@ -31,4 +31,6 @@ model.children[0].children[1].children[0];
 model.getObjectByName("Back");
 ```
 
-A better way of navigating Models is to visiting https://threejs.org/editor/
+### A better way of navigating Models is to visiting https://threejs.org/editor/
+
+if a gltf file contains animations, you are able to play/stop them using the editor in three.org
