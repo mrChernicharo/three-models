@@ -24,11 +24,12 @@ let agentGroup;
 let navmesh;
 let groupId;
 let navpath;
+let pathfinding;
+let pathfindingHelper;
+let zone;
 
-const baseURL = "/assets/MapNavMesh5.fbx";
-const pathfinding = new Pathfinding();
-const pathfindingHelper = new PathfindingHelper();
-const ZONE = "level1";
+const baseURL = "/assets/MapNavMesh6.fbx";
+const ZONE_ID = "level1";
 // const baseURL = "/assets/map04.glb";
 
 async function setup() {
@@ -43,7 +44,7 @@ async function setup() {
 
   mouseRay = new THREE.Raycaster();
 
-  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
   orbit = new OrbitControls(camera, renderer.domElement); // Sets orbit control to move the camera around
   camera.position.set(0, 10, 40); // Camera positioning
   orbit.update();
@@ -69,32 +70,39 @@ async function setup() {
     console.log(found, agentGroup.position);
     if (!found[0]) return;
 
-    const targetPos = found[0].point;
-    groupId = pathfinding.getGroup(ZONE, agentGroup.position);
-    const closest = pathfinding.getClosestNode(agentGroup.position, ZONE, groupId);
-    navpath = pathfinding.findPath(closest.centroid, targetPos, ZONE, groupId);
+    let targetPos = found[0].point;
+    // let targetPos = found[0].point;
+    groupId = pathfinding.getGroup(ZONE_ID, agentGroup.position);
+    const closest = pathfinding.getClosestNode(agentGroup.position, ZONE_ID, groupId);
+    const farthest = pathfinding.getClosestNode(targetPos, ZONE_ID, groupId);
 
-    console.log({ found, navpath, navmesh, pathfinding, targetPos, agentGroup, closest, ZONE, groupId });
+    navpath = pathfinding.findPath(closest.centroid, farthest.centroid, ZONE_ID, groupId);
+    console.log({ found, navpath, navmesh, pathfinding, targetPos, agentGroup, closest });
 
     pathfindingHelper.reset();
     pathfindingHelper.setPlayerPosition(closest);
-    pathfindingHelper.setTargetPosition(targetPos);
-    pathfindingHelper.setPath(navpath);
+    pathfindingHelper.setTargetPosition(farthest);
+
+    if (navpath) {
+      pathfindingHelper.setPath(navpath);
+    }
+
+    console.log({ ap: agentGroup.position, closest, farthest });
+    // const farthest = pathfinding.getClosestNode(new THREE.Vector3(agentGroup.position), ZONE_ID, groupId, true);
   });
 }
 
 function drawGrid() {
-  const gridHelper = new THREE.GridHelper(20, 22);
-
-  const axesHelper = new THREE.AxesHelper(14);
-  //   axesHelper.position.y = 6;
-
-  scene.add(gridHelper);
-  scene.add(axesHelper);
+  // const gridHelper = new THREE.GridHelper(20, 22);
+  // const axesHelper = new THREE.AxesHelper(14);
+  // //   axesHelper.position.y = 6;
+  // scene.add(gridHelper);
+  // scene.add(axesHelper);
 }
 
 async function loadMapModel() {
   const glb = await fbxLoader.loadAsync(fileUrl.href);
+  glb.scale.set(0.02, 0.02, 0.02);
   bricksTexture = await new THREE.TextureLoader().loadAsync("/assets/bricksTexture.jpeg");
   stoneTexture = await new THREE.TextureLoader().loadAsync("/assets/stoneTexture.jpeg");
 
@@ -105,20 +113,26 @@ async function loadMapModel() {
 }
 
 function setupPathfinder(glb) {
-  scene.add(pathfindingHelper);
+  pathfinding = new Pathfinding();
+  pathfindingHelper = new PathfindingHelper();
 
   if (!navmesh && glb.isObject3D && glb.children.length) {
     navmesh = glb.getObjectByName("Navmesh");
-    pathfinding.setZoneData(ZONE, Pathfinding.createZone(navmesh.geometry));
+    // navmesh.rotation.set(Math.Pi / 2)
+    // navmesh.geometry.computeVertexNormals();
+    zone = Pathfinding.createZone(navmesh.geometry);
+    pathfinding.setZoneData(ZONE_ID, zone);
 
     console.log("setupPathfinder", {
-      navmesh,
-      pathfinding,
-      pathfindingHelper,
-      origGeo: navmesh.geometry,
-      neoGeo: new THREE.BufferGeometry(new Float32Array(navmesh.geometry.attributes.normal)),
+      zone,
+      //   neoGeo: new THREE.BufferGeometry(new Float32Array(navmesh.geometry.attributes.normal)),
+      //   origGeo: navmesh.geometry,
+      //   navmesh,
+      //   pathfinding,
+      //   pathfindingHelper,
     });
   }
+  scene.add(pathfindingHelper);
 }
 
 function setupMapTextures(glb) {
@@ -127,7 +141,7 @@ function setupMapTextures(glb) {
     if (obj.isMesh) {
       switch (obj.name) {
         case "Navmesh":
-          obj.material = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.5 });
+          obj.material = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.1 });
           break;
         case "BevelCube":
           {
@@ -175,13 +189,13 @@ function setupAgent() {
     new THREE.CylinderGeometry(agentRadius, agentRadius, agentHeight),
     new THREE.MeshBasicMaterial({ color: 0xff0000 })
   );
-  //   agentMesh.position.y = agentHeight / 2;
+  agentMesh.position.y = agentHeight / 2;
   agentGroup = new THREE.Group();
   agentGroup.add(agentMesh);
   agentGroup.position.x = 0;
   agentGroup.position.z = 5;
   //   agentGroup.position.y = 0.6172;
-  agentGroup.position.y = 1;
+  // agentGroup.position.y = -1.35;
   scene.add(agentGroup);
 }
 
