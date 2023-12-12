@@ -59,7 +59,6 @@ async function setup() {
   camera.position.x = -22;
   camera.position.z = 40;
   camera.position.y = 22.75;
-  orbit.update();
 
   ambientLight = new THREE.AmbientLight(0xefefef, 60);
   hemisphereLight = new THREE.HemisphereLight(0xffffff);
@@ -155,27 +154,22 @@ async function setupMapTextures(glb) {
 function setupAgent() {
   const agentRadius = 0.25;
   const agentHeight = 1;
-  const agentMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(0, agentRadius, agentHeight),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
-  );
-  agentMesh.lookAt(new THREE.Vector3(0, -1, 0));
-  // agentMesh.rotateX(Math.PI);
-  agentMesh.position.y = agentHeight / 2;
-  agentGroup = new THREE.Group();
-  agentGroup.add(agentMesh);
+  const agentGeometry = new THREE.CylinderGeometry(agentRadius, 0, agentHeight);
+  const agentMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial);
 
-  const agentFolder = gui.addFolder("Agent");
-  agentFolder.add(agentGroup.position, "x", -20, 20);
-  agentFolder.add(agentGroup.position, "y", 0.0, 2.0);
-  agentFolder.add(agentGroup.position, "z", -20, 20);
+  agentMesh.lookAt(new THREE.Vector3(0, 1, 0));
+  agentGroup = new THREE.Group();
   agentGroup.position.x = -18;
   agentGroup.position.z = 18;
   agentGroup.position.y = 1.5;
+  agentGroup.rotateY(Math.PI); // rotate initially
+  agentGroup.add(agentMesh);
+
   scene.add(agentGroup);
 }
 
-export async function runMyMapDemo2() {
+export async function runMyMapDemo3() {
   setup();
 
   drawGrid();
@@ -210,19 +204,12 @@ function moveAgent(deltaTime) {
 
 function animate() {
   moveAgent(clock.getDelta());
+  orbit.update();
+
   renderer.render(scene, camera);
 }
 
-//   gui.add
-//   gui = new GUI();
-//   gui.add(bricksTexture, "repeat");
-
-// const gui = new GUI()
-// const cubeFolder = gui.addFolder('Cube')
-// cubeFolder.add(cube.rotation, 'x', 0, Math.PI * 2)
-// cubeFolder.add(cube.rotation, 'y', 0, Math.PI * 2)
-// cubeFolder.add(cube.rotation, 'z', 0, Math.PI * 2)
-// cubeFolder.open()
-// const cameraFolder = gui.addFolder('Camera')
-// cameraFolder.add(camera.position, 'z', 0, 10)
-// cameraFolder.open()
+// const agentFolder = gui.addFolder("Agent");
+// agentFolder.add(agentGroup.position, "x", -20, 20);
+// agentFolder.add(agentGroup.position, "y", 0.0, 2.0);
+// agentFolder.add(agentGroup.position, "z", -20, 20);
