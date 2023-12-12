@@ -2,14 +2,15 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 import { GUI } from "dat.gui";
 import { Pathfinding, PathfindingHelper } from "three-pathfinding";
-import { Vector2 } from "three";
 
 let gui; //GUI
 let fileUrl; //URL
-let fbxLoader; //FBXLoader
-// let glTFLoader; //GLTFLoader
+// let fbxLoader; //FBXLoader
+// let objLoader; //OBJLoader
+let glTFLoader; //GLTFLoader
 let renderer; //THREE.WebGLRenderer
 let scene; //THREE.Scene
 let camera;
@@ -28,13 +29,15 @@ let pathfinding;
 let pathfindingHelper;
 let zone;
 
-const baseURL = "/assets/MapNavMesh6.fbx";
+// const baseURL = "/assets/MAP-002.glb";
+const baseURL = "/assets/MAZE.glb";
 const ZONE_ID = "level1";
-// const baseURL = "/assets/map04.glb";
 
 async function setup() {
   fileUrl = new URL(baseURL, import.meta.url);
-  fbxLoader = new FBXLoader();
+  // fbxLoader = new FBXLoader();
+  // objLoader = new OBJLoader();
+  glTFLoader = new GLTFLoader();
   renderer = new THREE.WebGLRenderer({ antialias: true });
   scene = new THREE.Scene();
 
@@ -71,24 +74,18 @@ async function setup() {
     if (!found[0]) return;
 
     let targetPos = found[0].point;
-    // let targetPos = found[0].point;
     groupId = pathfinding.getGroup(ZONE_ID, agentGroup.position);
     const closest = pathfinding.getClosestNode(agentGroup.position, ZONE_ID, groupId);
-    const farthest = pathfinding.getClosestNode(targetPos, ZONE_ID, groupId);
 
-    navpath = pathfinding.findPath(closest.centroid, farthest.centroid, ZONE_ID, groupId);
+    navpath = pathfinding.findPath(closest.centroid, targetPos, ZONE_ID, groupId);
     console.log({ found, navpath, navmesh, pathfinding, targetPos, agentGroup, closest });
 
     pathfindingHelper.reset();
     pathfindingHelper.setPlayerPosition(closest);
-    pathfindingHelper.setTargetPosition(farthest);
-
+    pathfindingHelper.setTargetPosition(targetPos);
     if (navpath) {
       pathfindingHelper.setPath(navpath);
     }
-
-    console.log({ ap: agentGroup.position, closest, farthest });
-    // const farthest = pathfinding.getClosestNode(new THREE.Vector3(agentGroup.position), ZONE_ID, groupId, true);
   });
 }
 
@@ -101,47 +98,37 @@ function drawGrid() {
 }
 
 async function loadMapModel() {
-  const glb = await fbxLoader.loadAsync(fileUrl.href);
-  glb.scale.set(0.02, 0.02, 0.02);
-  bricksTexture = await new THREE.TextureLoader().loadAsync("/assets/bricksTexture.jpeg");
-  stoneTexture = await new THREE.TextureLoader().loadAsync("/assets/stoneTexture.jpeg");
-
+  const glb = await glTFLoader.loadAsync(fileUrl.href);
+  const model = glb.scene;
   console.log({ glb, bricksTexture, stoneTexture });
 
-  scene.add(glb);
-  return glb;
+  scene.add(model);
+  return model;
 }
 
-function setupPathfinder(glb) {
+function setupPathfinder(model) {
   pathfinding = new Pathfinding();
   pathfindingHelper = new PathfindingHelper();
 
-  if (!navmesh && glb.isObject3D && glb.children.length) {
-    navmesh = glb.getObjectByName("Navmesh");
-    // navmesh.rotation.set(Math.Pi / 2)
-    // navmesh.geometry.computeVertexNormals();
-    zone = Pathfinding.createZone(navmesh.geometry);
-    pathfinding.setZoneData(ZONE_ID, zone);
+  if (!navmesh && model.isObject3D && model.children.length) {
+    navmesh = model.getObjectByName("Navmesh");
+    pathfinding.setZoneData(ZONE_ID, Pathfinding.createZone(navmesh.geometry));
 
-    console.log("setupPathfinder", {
-      zone,
-      //   neoGeo: new THREE.BufferGeometry(new Float32Array(navmesh.geometry.attributes.normal)),
-      //   origGeo: navmesh.geometry,
-      //   navmesh,
-      //   pathfinding,
-      //   pathfindingHelper,
-    });
+    console.log("setupPathfinder", { navmesh, pathfinding, pathfindingHelper });
   }
   scene.add(pathfindingHelper);
 }
 
-function setupMapTextures(glb) {
+async function setupMapTextures(glb) {
+  bricksTexture = await new THREE.TextureLoader().loadAsync("/assets/bricksTexture.jpeg");
+  stoneTexture = await new THREE.TextureLoader().loadAsync("/assets/stoneTexture.jpeg");
+
   glb.traverse((obj, i) => {
     // console.log(obj.name);
     if (obj.isMesh) {
       switch (obj.name) {
         case "Navmesh":
-          obj.material = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.1 });
+          obj.material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.1 });
           break;
         case "BevelCube":
           {
@@ -174,8 +161,13 @@ function setupMapTextures(glb) {
           obj.material = new THREE.MeshBasicMaterial({ color: 0x898989, map: texture });
           break;
         default:
-          //   obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: bricksTexture });
-          //   bricksTexture.repeat.set(20, 5);
+          {
+            const texture = bricksTexture.clone();
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(7, 7);
+            obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: texture });
+          }
           break;
       }
     }
@@ -189,13 +181,12 @@ function setupAgent() {
     new THREE.CylinderGeometry(agentRadius, agentRadius, agentHeight),
     new THREE.MeshBasicMaterial({ color: 0xff0000 })
   );
-  agentMesh.position.y = agentHeight / 2;
+  // agentMesh.position.y = agentHeight / 2;
   agentGroup = new THREE.Group();
   agentGroup.add(agentMesh);
-  agentGroup.position.x = 0;
-  agentGroup.position.z = 5;
-  //   agentGroup.position.y = 0.6172;
-  // agentGroup.position.y = -1.35;
+  agentGroup.position.x = 9;
+  agentGroup.position.z = 8.5;
+  agentGroup.position.y = 1.25;
   scene.add(agentGroup);
 }
 
@@ -205,11 +196,10 @@ export async function runMyMapDemo2() {
   drawGrid();
   setupAgent();
 
-  const glb = await loadMapModel();
+  const model = await loadMapModel();
 
-  setupMapTextures(glb);
-
-  setupPathfinder(glb);
+  await setupMapTextures(model);
+  setupPathfinder(model);
 
   renderer.setAnimationLoop(animate);
 }
@@ -217,39 +207,6 @@ export async function runMyMapDemo2() {
 function animate() {
   renderer.render(scene, camera);
 }
-
-// async function setupAnimalColorGUI() {
-//   const gltf = await glTFLoader.loadAsync(fileUrl.href);
-//   const model = gltf.scene;
-//   scene.add(model);
-//   console.log({ gltf, model });
-
-//   // navigating the model
-//   console.log(
-//     model.children[0].children[0].children[5],
-//     model.getObjectByName("Cube_5"),
-//     model.children[0].children[1].children[0],
-//     model.getObjectByName("Back")
-//   );
-
-//   // const donkeyArea1 = model.getObjectByName("Cube_1");
-//   // donkeyArea1.material.color.setHex(0xff0000);
-
-//   const skinnedMeshes = Array.from(model.getObjectByName("Donkey").children);
-
-//   const donkeyColors = {};
-//   const donkeyAreas = ["Primary", "Secondary", "Ears", "Hoofs", "Hair", "Nose", "EyesOutside", "EyesInside"];
-//   skinnedMeshes.forEach((mesh, i) => {
-//     // console.log(mesh.name, donkeyAreas[i]);
-//     donkeyColors[donkeyAreas[i]] = 0xffffff;
-//     gui.addColor(donkeyColors, donkeyAreas[i]).onChange((e) => {
-//       model.getObjectByName(mesh.name).material.color.setHex(e);
-//     });
-//   });
-// }
-
-//   bricksTexture.wrapS = THREE.RepeatWrapping;
-//   bricksTexture.wrapT = THREE.RepeatWrapping;
 
 //   gui.add
 //   gui = new GUI();
