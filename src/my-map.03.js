@@ -20,24 +20,24 @@ let hemisphereLight;
 let bricksTexture;
 let stoneTexture;
 let mouseRay;
-let mouseClickPos = new THREE.Vector2();
-let agentGroup;
 let navmesh;
-let groupId;
-let navpath;
 let pathfinding;
-let pathfindingHelper;
-let zone;
+// let pathfindingHelper;
+let agentGroup;
+let navpaths = [];
 let clock;
-let speed = 20;
-// const baseURL = "/assets/MAP-002.glb";
+let agentGroups = [];
+let pathfindingHelpers = [];
+let agentBlueprints = [
+  { speed: 5, pos: new THREE.Vector3(-18, 1.5, 18), color: 0xff0000 },
+  { speed: 10, pos: new THREE.Vector3(18, 1.5, 18), color: 0x00ff00 },
+  { speed: 20, pos: new THREE.Vector3(-18, 1.5, -18), color: 0x0000ff },
+];
 const baseURL = "/assets/MAZE.glb";
 const ZONE_ID = "level1";
 
 async function setup() {
   fileUrl = new URL(baseURL, import.meta.url);
-  // fbxLoader = new FBXLoader();
-  // objLoader = new OBJLoader();
   glTFLoader = new GLTFLoader();
   renderer = new THREE.WebGLRenderer({ antialias: true });
   scene = new THREE.Scene();
@@ -72,37 +72,40 @@ async function setup() {
   });
 
   window.addEventListener("click", (e) => {
+    let mouseClickPos = new THREE.Vector2();
+
     mouseClickPos.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouseClickPos.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
     mouseRay.setFromCamera(mouseClickPos, camera);
-
     const found = mouseRay.intersectObjects(scene.children);
-    console.log(found, agentGroup.position);
+    // console.log(found, agentGroup.position);
     if (!found[0]) return;
-
     let targetPos = found[0].point;
-    groupId = pathfinding.getGroup(ZONE_ID, agentGroup.position);
-    const closest = pathfinding.getClosestNode(agentGroup.position, ZONE_ID, groupId);
+    console.log("click", found, targetPos);
 
-    navpath = pathfinding.findPath(closest.centroid, targetPos, ZONE_ID, groupId);
-    console.log({ found, navpath, navmesh, pathfinding, targetPos, agentGroup, closest });
+    for (let i = 0; i < agentGroups.length; i++) {
+      const agentGroup = agentGroups[i];
+      const pathfindingHelper = pathfindingHelpers[i];
 
-    pathfindingHelper.reset();
-    pathfindingHelper.setPlayerPosition(closest);
-    pathfindingHelper.setTargetPosition(targetPos);
-    if (navpath) {
-      pathfindingHelper.setPath(navpath);
+      let groupId = pathfinding.getGroup(ZONE_ID, agentGroup.position);
+
+      const closestNode = pathfinding.getClosestNode(agentGroup.position, ZONE_ID, groupId);
+
+      const path = pathfinding.findPath(closestNode.centroid, targetPos, ZONE_ID, groupId);
+      if (path) {
+        navpaths[i] = path;
+        //   console.log({ found, navpaths, navmesh, pathfinding, targetPos, agentGroup, closest });
+
+        if (navpaths[i]) {
+          pathfindingHelper.reset();
+          pathfindingHelper.setPlayerPosition(closestNode);
+          pathfindingHelper.setTargetPosition(targetPos);
+          pathfindingHelper.setPath(navpaths[i]);
+        }
+      }
     }
   });
-}
-
-function drawGrid() {
-  // const gridHelper = new THREE.GridHelper(20, 22);
-  // const axesHelper = new THREE.AxesHelper(14);
-  // //   axesHelper.position.y = 6;
-  // scene.add(gridHelper);
-  // scene.add(axesHelper);
 }
 
 async function loadMapModel() {
@@ -116,15 +119,19 @@ async function loadMapModel() {
 
 function setupPathfinder(model) {
   pathfinding = new Pathfinding();
-  pathfindingHelper = new PathfindingHelper();
 
   if (!navmesh && model.isObject3D && model.children.length) {
     navmesh = model.getObjectByName("Navmesh");
-    pathfinding.setZoneData(ZONE_ID, Pathfinding.createZone(navmesh.geometry, 1));
 
-    console.log("setupPathfinder", { navmesh, pathfinding, pathfindingHelper });
+    pathfinding.setZoneData(ZONE_ID, Pathfinding.createZone(navmesh.geometry));
   }
-  scene.add(pathfindingHelper);
+
+  for (const _ of agentBlueprints) {
+    const pathfindingHelper = new PathfindingHelper();
+    console.log("setupPathfinder", { navmesh, pathfinding, pathfindingHelper });
+    scene.add(pathfindingHelper);
+    pathfindingHelpers.push(pathfindingHelper);
+  }
 }
 
 async function setupMapTextures(glb) {
@@ -151,65 +158,63 @@ async function setupMapTextures(glb) {
   });
 }
 
-function setupAgent() {
-  const agentRadius = 0.25;
-  const agentHeight = 1;
-  const agentGeometry = new THREE.CylinderGeometry(agentRadius, 0, agentHeight);
-  const agentMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial);
-
-  agentMesh.lookAt(new THREE.Vector3(0, 1, 0));
-  agentGroup = new THREE.Group();
-  agentGroup.position.x = -18;
-  agentGroup.position.z = 18;
-  agentGroup.position.y = 1.5;
-  agentGroup.rotateY(Math.PI); // rotate initially
-  agentGroup.add(agentMesh);
-
-  scene.add(agentGroup);
+function setupAgents() {
+  agentBlueprints.forEach((agent) => {
+    const agentRadius = 0.25;
+    const agentHeight = 1;
+    const agentGeometry = new THREE.CylinderGeometry(agentRadius, 0, agentHeight);
+    const agentMaterial = new THREE.MeshBasicMaterial({ color: agent.color });
+    const agentMesh = new THREE.Mesh(agentGeometry, agentMaterial);
+    agentMesh.lookAt(new THREE.Vector3(0, 1, 0));
+    agentGroup = new THREE.Group();
+    agentGroup.position.set(agent.pos.x, agent.pos.y, agent.pos.z);
+    agentGroup.add(agentMesh);
+    agentGroups.push(agentGroup);
+    scene.add(agentGroup);
+  });
 }
 
 export async function runMyMapDemo3() {
   setup();
 
-  drawGrid();
-  setupAgent();
-
   const model = await loadMapModel();
 
+  setupAgents();
+
   await setupMapTextures(model);
+
   setupPathfinder(model);
 
   renderer.setAnimationLoop(animate);
 }
 
-function moveAgent(deltaTime) {
-  if (!navpath || navpath.length <= 0) return;
+function moveAgents(deltaTime) {
+  for (let i = 0; i < agentGroups.length; i++) {
+    if (!navpaths[i] || navpaths[i].length <= 0) {
+      console.log(i, "DONE");
+      return;
+    }
 
-  let targetPos = navpath[0];
-  const velocity = targetPos.clone().sub(agentGroup.position);
+    let targetPos = navpaths[i][0];
+    const agentGroup = agentGroups[i];
+    const velocity = targetPos.clone().sub(agentGroup.position);
 
-  if (velocity.lengthSq() > 0.5 * 0.05) {
-    agentGroup.lookAt(targetPos);
+    if (velocity.lengthSq() > 0.5 * 0.005) {
+      agentGroup.lookAt(targetPos);
 
-    velocity.normalize();
-    console.log({ ...velocity });
-    const newVel = velocity.multiplyScalar(deltaTime * speed);
-
-    agentGroup.position.add(newVel);
-  } else {
-    navpath.shift();
+      velocity.normalize();
+      const finalVel = velocity.multiplyScalar(deltaTime * agentBlueprints[i].speed);
+      //   console.log(i, velocity.lengthSq(), finalVel);
+      agentGroup.position.add(finalVel);
+    } else {
+      navpaths[i].shift();
+    }
   }
 }
 
 function animate() {
-  moveAgent(clock.getDelta());
+  moveAgents(clock.getDelta());
   orbit.update();
 
   renderer.render(scene, camera);
 }
-
-// const agentFolder = gui.addFolder("Agent");
-// agentFolder.add(agentGroup.position, "x", -20, 20);
-// agentFolder.add(agentGroup.position, "y", 0.0, 2.0);
-// agentFolder.add(agentGroup.position, "z", -20, 20);
