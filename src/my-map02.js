@@ -28,7 +28,8 @@ let navpath;
 let pathfinding;
 let pathfindingHelper;
 let zone;
-
+let clock;
+let speed = 20;
 // const baseURL = "/assets/MAP-002.glb";
 const baseURL = "/assets/MAZE.glb";
 const ZONE_ID = "level1";
@@ -46,10 +47,18 @@ async function setup() {
   document.body.appendChild(renderer.domElement);
 
   mouseRay = new THREE.Raycaster();
+  gui = new GUI();
+  clock = new THREE.Clock();
 
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
   orbit = new OrbitControls(camera, renderer.domElement); // Sets orbit control to move the camera around
-  camera.position.set(0, 10, 40); // Camera positioning
+  const camFolder = gui.addFolder("Camera");
+  camFolder.add(camera.position, "x", -100, 100);
+  camFolder.add(camera.position, "y", -2, 20);
+  camFolder.add(camera.position, "z", -100, 100);
+  camera.position.x = -22;
+  camera.position.z = 40;
+  camera.position.y = 22.75;
   orbit.update();
 
   ambientLight = new THREE.AmbientLight(0xefefef, 60);
@@ -112,7 +121,7 @@ function setupPathfinder(model) {
 
   if (!navmesh && model.isObject3D && model.children.length) {
     navmesh = model.getObjectByName("Navmesh");
-    pathfinding.setZoneData(ZONE_ID, Pathfinding.createZone(navmesh.geometry));
+    pathfinding.setZoneData(ZONE_ID, Pathfinding.createZone(navmesh.geometry, 1));
 
     console.log("setupPathfinder", { navmesh, pathfinding, pathfindingHelper });
   }
@@ -124,48 +133,17 @@ async function setupMapTextures(glb) {
   stoneTexture = await new THREE.TextureLoader().loadAsync("/assets/stoneTexture.jpeg");
 
   glb.traverse((obj, i) => {
-    // console.log(obj.name);
     if (obj.isMesh) {
       switch (obj.name) {
         case "Navmesh":
           obj.material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.1 });
-          break;
-        case "BevelCube":
-          {
-            //   const texture = new THREE.Texture(bricksTexture, THREE.UVMapping, THREE.RepeatWrapping, THREE.RepeatWrapping);
-            const texture = bricksTexture.clone();
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(2, 3);
-            obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: texture });
-          }
-          break;
-        case "RBridge":
-        case "LBrigde":
-          {
-            const texture = bricksTexture.clone();
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(1, 7);
-            obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: texture });
-          }
-          //   bricksTexture.repeat.set(2, 3);
-          //   obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: bricksTexture });
-          break;
-        case "LowPlane":
-        case "HighPlane":
-          const texture = stoneTexture.clone();
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
-          texture.repeat.set(50, 25);
-          obj.material = new THREE.MeshBasicMaterial({ color: 0x898989, map: texture });
           break;
         default:
           {
             const texture = bricksTexture.clone();
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(7, 7);
+            texture.repeat.set(25, 25);
             obj.material = new THREE.MeshBasicMaterial({ color: 0xca947d, map: texture });
           }
           break;
@@ -178,15 +156,22 @@ function setupAgent() {
   const agentRadius = 0.25;
   const agentHeight = 1;
   const agentMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(agentRadius, agentRadius, agentHeight),
+    new THREE.CylinderGeometry(agentRadius, 0, agentHeight),
     new THREE.MeshBasicMaterial({ color: 0xff0000 })
   );
-  // agentMesh.position.y = agentHeight / 2;
+  // agentMesh.rotateX(Math.PI / 2);
+  agentMesh.lookAt(new THREE.Vector3(0, 1, 0));
+  agentMesh.position.y = agentHeight / 2;
   agentGroup = new THREE.Group();
   agentGroup.add(agentMesh);
-  agentGroup.position.x = 9;
-  agentGroup.position.z = 8.5;
-  agentGroup.position.y = 1.25;
+
+  const agentFolder = gui.addFolder("Agent");
+  agentFolder.add(agentGroup.position, "x", -20, 20);
+  agentFolder.add(agentGroup.position, "y", 0.0, 2.0);
+  agentFolder.add(agentGroup.position, "z", -20, 20);
+  agentGroup.position.x = -18;
+  agentGroup.position.z = 18;
+  agentGroup.position.y = 1.5;
   scene.add(agentGroup);
 }
 
@@ -204,7 +189,27 @@ export async function runMyMapDemo2() {
   renderer.setAnimationLoop(animate);
 }
 
+function moveAgent(deltaTime) {
+  if (!navpath || navpath.length <= 0) return;
+
+  let targetPos = navpath[0];
+  const velocity = targetPos.clone().sub(agentGroup.position);
+  const dist2 = agentGroup.position.distanceTo(targetPos);
+
+  if (velocity.lengthSq() > 0.5 * 0.05) {
+    velocity.normalize();
+    console.log({ ...velocity });
+    const newVel = velocity.multiplyScalar(deltaTime * speed);
+    agentGroup.lookAt(targetPos);
+
+    agentGroup.position.add(newVel);
+  } else {
+    navpath.shift();
+  }
+}
+
 function animate() {
+  moveAgent(clock.getDelta());
   renderer.render(scene, camera);
 }
 
